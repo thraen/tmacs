@@ -103,7 +103,6 @@ def read(fd):
     global local_file
     global remote_filename
     global reading_file
-    global save_back
 
     ts = os.get_terminal_size()
     if (ts != termsize):
