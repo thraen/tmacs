@@ -3,7 +3,6 @@
 Edit remote files with your editor of choice (vi or emacs), even if
 TRAMP doesn't really work for you or if you ssh and su your way
 through a network.
-
 It works by tunneling the file-data through the terminal on which you
 are working.
 
