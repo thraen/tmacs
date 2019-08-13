@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# this is just a copy of the code in tmacswrap
+
+if [ "$1" == "-t" ]; then
+    if [ ${1:0:1} = '/' ]; then # absolute filename
+        echo "********TMACS********#$(echo "TMACS#${2}" | base64)#***"
+        base64 ${2}
+        echo '#********'
+    else # relative filename
+        echo "********TMACS********#$(echo "TMACS#$(pwd)/${2}" | base64)#***"
+        base64 ${2}
+        echo '#********'
+    fi
+else
+    THISSERVER=$(whoami)@$(hostname)
+    if [ ${1:0:1} = '/' ]; then # absolute filename
+        echo "********TMACS********#$(echo "TRAMP#/ssh:${THISSERVER}:/${1}" | base64)#***"
+    else # relative filename
+        echo "********TMACS********#$(echo "TRAMP#/ssh:${THISSERVER}:/$(pwd)/${1}" | base64)#***"
+    fi
+fi

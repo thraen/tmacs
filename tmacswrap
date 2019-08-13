@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+
+#
+# This is a wrapper script for a shell
+# reacts to magic words, which get written to the terminal
+# kinda like escape sequences.
+# starts emacsclient if it encounters ********TMACS********#QUERY#***
+# QUERY must be base64
+#
+
+# Copyright (C) 2019 Moritz Molle
+#
+# This program is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of  MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import os
+import pty
+import tty
+import atexit
+import termios
+import struct
+import fcntl
+import codecs
+import re
+import sys
+
+def getchar():
+    #Returns a single character from standard input
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.buffer.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+
+marker = b"********TMACS********"
+file_end_marker = b"#********"
+ringbuffer = b""
+termsize = ()
+remote_filename = ""
+local_filename = ""
+local_file=None
+reading_file = False
+
+def stdin_read(fd):
+    global reading_file
+    global local_filename
+    global remote_filename
+
+    data = os.read(fd, 1024)
+
+    if (data == b'\x14'):  # C-t
+        next_char = getchar()
+        if (next_char == b'\x14'):
+            return b'\x14'
+        
+        elif (next_char == b's'): ## if reading_file is stuck
+            reading_file = False
+            
+        elif (next_char == b't'):
+            return b"""
+tmacs() {
+        if [ "$1" == "-t" ]; then
+            if [ ${1:0:1} = '/' ]; then   # absolute filename
+                echo "********TMACS********#$(echo "TMACS#${2}" | base64)#***"
+                base64 ${2}
+                echo '#********'
+            else   # relative filename
+                echo "********TMACS********#$(echo "TMACS#$(pwd)/${2}" | base64)#***"
+                base64 ${2}
+                echo '#********'
+            fi
+        else
+            THISSERVER=$(whoami)@$(hostname)
+            if [ ${1:0:1} = '/' ]; then   # absolute filename
+                echo "********TMACS********#$(echo "TRAMP#/ssh:${THISSERVER}:/${1}" | base64)#***"
+            else   # relative filename
+                echo "********TMACS********#$(echo "TRAMP#/ssh:${THISSERVER}:/$(pwd)/${1}" | base64)#***"
+            fi
+        fi
+}
+"""
+        return b'\x14'+next_char
+    return data
+
+def read(fd):
+    global ringbuffer
+    global termsize
+    global local_filename
+    global local_file
+    global remote_filename
+    global reading_file
+    global save_back
+
+    ts = os.get_terminal_size()
+    if (ts != termsize):
+        termsize = ts
+        set_winsize(fd, termsize[1], termsize[0])
+
+    data = os.read(fd, 1024)
+    ringbuffer += data
+
+    if (not reading_file):
+
+        while (len(ringbuffer) > len(marker) and
+               not ringbuffer.startswith(marker)):
+            ringbuffer = ringbuffer[1:]  # snip the first byte away
+
+        try:
+            if ringbuffer.startswith(marker):
+                if (b"#***" in ringbuffer):
+                    query = codecs.decode(ringbuffer[ringbuffer.index(b'#')+1:
+                                                     ringbuffer.index(b"#***")], "base64")
+
+                    if query.startswith(b"TRAMP#"):
+                        _, filename = query.split(b"#", 1)
+                        os.system(b"emacsclient -n %s" % filename)
+                        ringbuffer = ringbuffer[1:]
+                    elif query.startswith(b"TMACS#"):
+                        _, remote_filename = query.split(b"#", 1)
+                        remote_filename=remote_filename.strip()
+                        local_filename = b"/tmp/TMACS-REMOTE-%s" % os.path.basename(remote_filename)
+                        local_file = open(local_filename+b".b64", "wb")
+                        ringbuffer = ringbuffer[ringbuffer.index(b"#***") + 5:]
+                        reading_file = True
+                    else: # no valid protocol ident
+                        ringbuffer = ringbuffer[1:]
+
+                elif len(ringbuffer) > 10000:   # too long
+                    ringbuffer = ringbuffer[1:]
+        except: # don't care about errors, just skip over whatever we found
+            ringbuffer = ringbuffer[1:]
+
+    if (reading_file):     # no else! may be a fallthrough
+        if file_end_marker in ringbuffer:
+            local_file.write(ringbuffer[:ringbuffer.index(file_end_marker)])
+            ringbuffer = ringbuffer[ringbuffer.index(file_end_marker):]
+            local_file.close()
+            reading_file = False
+
+            # done reading - now editing 
+            os.system(b'base64 -di < "%s.b64" > "%s"' % (local_filename, local_filename))
+            os.system(b'cp "%s" "%s.orig"' % (local_filename, local_filename))
+            os.system(b'emacsclient -t "%s"' % local_filename)
+
+            # done editing - now saving back
+            if (os.system(b'diff -q "%s" "%s.orig" > /dev/null' % (local_filename, local_filename))):
+                os.write(fd, b'[ -f "%(rf)s" ] && cp "%(rf)s" "%(rf)s.tmacs~" ; cat | base64 -di > "%(rf)s" \n' %
+                         {b'rf': remote_filename})
+                fc = os.popen('base64 "%s"' % local_filename.decode('utf8'))
+                for line in fc.readlines():
+                    os.write(fd, line.encode('utf8'))
+
+                os.write(fd, b'\n\x04')
+            os.write(fd, b'\n')
+            
+            # cleanup
+            os.remove(local_filename)
+            os.remove(b"%s.orig" % local_filename)
+            os.remove(b"%s.b64" % local_filename)
+            
+            return b"\0"
+
+        else:
+            local_file.write(ringbuffer)
+            ringbuffer = b""
+            return b"."
+            
+    
+    # set marker-title
+    # this doesn't work if the escape sequence is broken over reads
+    newdata = re.sub(b"\x1b\\]0;(.*)\x07", b"\x1b\x5d\x32\x3btmacswrap(\\1)\x07", data)
+
+    return newdata
+
+def atexit_function():
+    print("\x1b\x5d\x32\x3b%s\x07" % "")
+
+def settitle(title):
+    print("\x1b\x5d\x32\x3b%s\x07" % title)
+
+def set_winsize(fd, row, col, xpix=0, ypix=0):
+    winsize = struct.pack("HHHH", row, col, xpix, ypix)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
+
+settitle("(tmacswrap)")
+pty.spawn("/bin/bash", read, stdin_read)
+atexit.register(atexit_function)
