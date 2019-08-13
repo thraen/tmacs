@@ -44,9 +44,9 @@ C-t t : Installs the tmacs command
 
     $ tmacs <file>
      
-     # tunnels file through terminal and starts local emacsclient
-     # this is the really useful thing, if tramp is not a real option
-     $ tmacs -t <file>
+    # tunnels file through terminal and starts local emacsclient
+    # this is the really useful thing, if tramp is not a real option
+    $ tmacs -t <file>
  
 ## Customize ##
 
