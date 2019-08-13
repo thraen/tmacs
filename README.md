@@ -9,39 +9,44 @@ are working.
 ## Example ##
 
 Start local emacs:
- $ emacs
+    
+	$ emacs
 
 In emacs, start the server:
- M-x server-start
+    
+	M-x server-start
  
 In another terminal:
- $ tmacswrap    # this starts tmacswrap in your terminal
+
+    $ tmacswrap    # this starts tmacswrap in your terminal
 
 You should see a terminal title like tmacswrap(/home/user)
 
- # ssh a little bit around
- $ ssh you@this-server.de
- $ ssh youtoo@server2.companydomain
- $ ssh you@hard-to-reach-server.companydomain
+    # ssh a little bit around
 
- # su to some user
- $ su
+    $ ssh you@this-server.de
+    $ ssh youtoo@server2.companydomain
+    $ ssh you@hard-to-reach-server.companydomain
+
+    # su to some user
+    $ su
 
 On a this shell (it's build for bash) press Ctrl-t t. That should install
 the 'tmacs' command as a function in your current shell session.
-
- $ tmacs -t some_text_file.txt   # this should open your local emacsclient
+    
+	$ tmacs -t some_text_file.txt   # this should open your local emacsclient
  
 ## Usage ##
 
-C-t t : Installs the tmacs command
+C-t t : Installs the tmacs command  
 
- # starts local emacsclient to use with tramp
- $ tmacs <file>
- 
- # tunnels file through terminal and starts local emacsclient
- # this is the really useful thing, if tramp is not a real option
- $ tmacs -t <file>
+    # starts local emacsclient to use with tramp
+
+    $ tmacs <file>
+     
+     # tunnels file through terminal and starts local emacsclient
+     # this is the really useful thing, if tramp is not a real option
+     $ tmacs -t <file>
  
 ## Customize ##
 
