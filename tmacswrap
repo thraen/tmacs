@@ -33,6 +33,7 @@ import fcntl
 import codecs
 import re
 import sys
+import shlex
 
 def getchar():
     #Returns a single character from standard input
@@ -54,6 +55,10 @@ remote_filename = ""
 local_filename = ""
 local_file=None
 reading_file = False
+
+def quote(fn):
+    """quoting bytes-strings"""
+    return shlex.quote(fn.decode('utf8')).encode('utf8')
 
 def stdin_read(fd):
     global reading_file
@@ -126,7 +131,7 @@ def read(fd):
 
                     if query.startswith(b"TRAMP#"):
                         _, filename = query.split(b"#", 1)
-                        os.system(b"emacsclient -n %s" % filename)
+                        os.system(b"emacsclient -n %s" % quote(filename))
                         ringbuffer = ringbuffer[1:]
                     elif query.startswith(b"TMACS#"):
                         _, remote_filename = query.split(b"#", 1)
@@ -151,15 +156,19 @@ def read(fd):
             reading_file = False
 
             # done reading - now editing 
-            os.system(b'base64 -di < "%s.b64" > "%s"' % (local_filename, local_filename))
-            os.system(b'cp "%s" "%s.orig"' % (local_filename, local_filename))
-            os.system(b'emacsclient -t "%s"' % local_filename)
+            os.system(b'base64 -di < %s > %s' % (quote(local_filename+b".b64"),
+                                                 quote(local_filename)))
+            os.system(b'cp %s %s' % (quote(local_filename),
+                                     quote(local_filename+b".orig")))
+            os.system(b'emacsclient -t %s' % quote(local_filename))
 
             # done editing - now saving back
-            if (os.system(b'diff -q "%s" "%s.orig" > /dev/null' % (local_filename, local_filename))):
-                os.write(fd, b'[ -f "%(rf)s" ] && cp "%(rf)s" "%(rf)s.tmacs~" ; cat | base64 -di > "%(rf)s" \n' %
-                         {b'rf': remote_filename})
-                fc = os.popen('base64 "%s"' % local_filename.decode('utf8'))
+            if (os.system(b'diff -q %s %s > /dev/null' % (quote(local_filename),
+                                                          quote(local_filename+b".orig")))):
+                os.write(fd, b'[ -f %(rf)s ] && cp %(rf)s %(rft)s ; cat | base64 -di > %(rf)s \n' %
+                         {b'rf': quote(remote_filename),
+                          b'rft': quote(remote_filename+b'.tmacs~')})
+                fc = os.popen('base64 %s' % shlex.quote(local_filename.decode('utf8')))
                 for line in fc.readlines():
                     os.write(fd, line.encode('utf8'))
 
