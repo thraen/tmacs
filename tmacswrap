@@ -79,7 +79,7 @@ def stdin_read(fd):
             return b"""
 tmacs() {
         if [ "$1" == "-t" ]; then
-            if [ ${1:0:1} = '/' ]; then   # absolute filename
+            if [ ${2:0:1} = '/' ]; then   # absolute filename
                 echo "********TMACS********#$(echo "TMACS#${2}" | base64)#***"
                 base64 "${2}"
                 echo '#********'
