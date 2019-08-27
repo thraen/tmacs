@@ -81,11 +81,11 @@ tmacs() {
         if [ "$1" == "-t" ]; then
             if [ ${2:0:1} = '/' ]; then   # absolute filename
                 echo "********TMACS********#$(echo "TMACS#${2}" | base64)#***"
-                base64 "${2}"
+                [ -f "${2}" ] && base64 "${2}"
                 echo '#********'
             else   # relative filename
                 echo "********TMACS********#$(echo "TMACS#$(pwd)/${2}" | base64)#***"
-                base64 "${2}"
+                [ -f "${2}" ] && base64 "${2}"
                 echo '#********'
             fi
         else
