@@ -79,7 +79,8 @@ def stdin_read(fd):
             
         elif (next_char == b't'):
             return b"""
-tmacs() {
+HISTCONTROL="ignoreboth"
+ tmacs() {
         if [ "$1" == "-t" ]; then
             if [ ${2:0:1} = '/' ]; then   # absolute filename
                 echo "********TMACS********#$(echo "TMACS#${2}" | base64)#***"
@@ -167,7 +168,7 @@ def read(fd):
             # done editing - now saving back
             if (os.system(b'diff -q %s %s > /dev/null' % (quote(local_filename),
                                                           quote(local_filename+b".orig")))):
-                os.write(fd, b'[ -f %(rf)s ] && cp %(rf)s %(rft)s ; cat | base64 -di > %(rf)s \n' %
+                os.write(fd, b' [ -f %(rf)s ] && cp %(rf)s %(rft)s ; cat | base64 -di > %(rf)s \n' %
                          {b'rf': quote(remote_filename),
                           b'rft': quote(remote_filename+b'.tmacs~')})
                 fc = os.popen('base64 %s' % shlex.quote(local_filename.decode('utf8')))
