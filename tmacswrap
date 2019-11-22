@@ -35,6 +35,7 @@ import re
 import sys
 import shlex
 import random
+import time
 
 def getchar():
     #Returns a single character from standard input
@@ -171,12 +172,15 @@ def read(fd):
                 os.write(fd, b' [ -f %(rf)s ] && cp %(rf)s %(rft)s ; cat | base64 -di > %(rf)s \n' %
                          {b'rf': quote(remote_filename),
                           b'rft': quote(remote_filename+b'.tmacs~')})
+                time.sleep(0.5)
                 fc = os.popen('base64 %s' % shlex.quote(local_filename.decode('utf8')))
                 for line in fc.readlines():
                     os.write(fd, line.encode('utf8'))
-
+                    time.sleep(0.01)
+                time.sleep(0.5)
                 os.write(fd, b'\n\x04')
             os.write(fd, b'\n')
+            
             
             # cleanup
             os.remove(local_filename)
