@@ -84,24 +84,31 @@ HISTCONTROL="ignoreboth"
  tmacs() {
         if [ "$1" == "-t" ]; then
             if [ ${2:0:1} = '/' ]; then   # absolute filename
-                echo "********TMACS********#$(echo "TMACS#${2}" | base64)#***"
+                echo "********TMACS********#$(echo -n "TMACS#${2}" | base64)#***"
                 [ -f "${2}" ] && base64 "${2}"
                 echo '#********'
             else   # relative filename
-                echo "********TMACS********#$(echo "TMACS#$(pwd)/${2}" | base64)#***"
+                echo "********TMACS********#$(echo -n "TMACS#$(pwd)/${2}" | base64)#***"
                 [ -f "${2}" ] && base64 "${2}"
                 echo '#********'
             fi
         else
             THISSERVER=$(whoami)@$(hostname)
             if [ ${1:0:1} = '/' ]; then   # absolute filename
-                echo "********TMACS********#$(echo "TRAMP#/ssh:${THISSERVER}:/${1}" | base64)#***"
+                echo "********TMACS********#$(echo -n "TRAMP#/ssh:${THISSERVER}:/${1}" | base64)#***"
             else   # relative filename
-                echo "********TMACS********#$(echo "TRAMP#/ssh:${THISSERVER}:/$(pwd)/${1}" | base64)#***"
+                echo "********TMACS********#$(echo -n "TRAMP#/ssh:${THISSERVER}:/$(pwd)/${1}" | base64)#***"
             fi
         fi
 }
 """
+        elif (next_char == b'n'):
+            return b"""
+HISTCONTROL="ignoreboth"
+ tmn() {
+        echo "********TMACS********#$(echo -n "TMN#${1}" | base64)#***"
+}
+"""     
         return b'\x14'+next_char
     return data
 
@@ -135,7 +142,7 @@ def read(fd):
 
                     if query.startswith(b"TRAMP#"):
                         _, filename = query.split(b"#", 1)
-                        os.system(b"emacsclient -n %s" % quote(filename))
+                        os.system(b"emacsclient -n %s" % quote(filename.strip()))
                         ringbuffer = ringbuffer[1:]
                     elif query.startswith(b"TMACS#"):
                         _, remote_filename = query.split(b"#", 1)
@@ -144,6 +151,13 @@ def read(fd):
                         local_file = open(local_filename+b".b64", "wb")
                         ringbuffer = ringbuffer[ringbuffer.index(b"#***") + 5:]
                         reading_file = True
+                    elif query.startswith(b"TMN#"):
+                        _, msg = query.split(b"#", 1)
+                        if (msg == ""):
+                            msg = "tmacswrap notification"
+                        os.system(b'/home/moritzm/bin/wintoast "%s"' % msg)
+                        ringbuffer = ringbuffer[1:]
+
                     else: # no valid protocol ident
                         ringbuffer = ringbuffer[1:]
 
@@ -176,7 +190,6 @@ def read(fd):
                 fc = os.popen('base64 %s' % shlex.quote(local_filename.decode('utf8')))
                 for line in fc.readlines():
                     os.write(fd, line.encode('utf8'))
-                    time.sleep(0.01)
                 time.sleep(0.5)
                 os.write(fd, b'\n\x04')
             os.write(fd, b'\n')
@@ -197,7 +210,7 @@ def read(fd):
     
     # set marker-title
     # this doesn't work if the escape sequence is broken over reads
-    newdata = re.sub(b"\x1b\\]0;(.*)\x07", b"\x1b\x5d\x32\x3btmacswrap(\\1)\x07", data)
+    newdata = re.sub(b"\x1b\\]0;(.*)\x07", b"\x1b\x5d\x32\x3btmacswrap2(\\1)\x07", data)
 
     return newdata
 
