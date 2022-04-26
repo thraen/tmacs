@@ -210,7 +210,7 @@ def read(fd):
     
     # set marker-title
     # this doesn't work if the escape sequence is broken over reads
-    newdata = re.sub(b"\x1b\\]0;(.*)\x07", b"\x1b\x5d\x32\x3btmacswrap2(\\1)\x07", data)
+    newdata = re.sub(b"\x1b\\]0;(.*)\x07", b"\x1b\x5d\x32\x3btmacswrap(\\1)\x07", data)
 
     return newdata
 
