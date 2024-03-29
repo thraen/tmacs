@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+
+from  oink import *
+
+# start_mar = b"_.o"
+start_mar = start_marker[0:3]
+# start_ker = b"OO"
+start_ker = start_marker[3:]
+
+# end_mar = b"OO"
+end_mar = end_marker[0:2]
+# end_ker = b"o._"
+end_ker = end_marker[2:]
+
+print(20*'\n')
+
+def test_one_packet_hold_start_marker_end_of_packet():
+    ret = do_oink(
+                          b"abc" \
+                        + start_mar \
+                      )
+    print(ret == b'abc' , ret) ## do not return unfinished marker
+# test_one_packet_hold_start_marker_end_of_packet()
+
+def test_one_packet_hold_start_marker_cancel():
+    ret = do_oink(
+                          b"abc" \
+                        + start_mar \
+                        + b"xyz" \
+                      )
+    print(ret == b'abc' + start_mar + b'xyz', ret)
+# test_one_packet_hold_start_marker_cancel()
+
+def test_one_packet_no_start_marker_ignore_end_marker():
+    ret = do_oink(
+                          b"abc" \
+                        + end_mar \
+                      )
+    print(ret == b'abc' + end_mar, ret)
+# test_one_packet_no_start_marker_ignore_end_marker()
+
+def test_one_packet_start_marker_piggy_end_marker():
+    global piggy
+    ret = do_oink(
+                        start_marker \
+                      + b"MUH" \
+                      + end_marker \
+                      )
+    print(ret == b'', ret)
+    print(piggy == b'MUH', piggy)
+# test_one_packet_start_marker_piggy_end_marker()
+
+def test_one_packet_start_marker_piggy_cancel_end_marker():
+    global piggy
+    ret = do_oink(
+                        start_marker \
+                      + b"MUH" \
+                      + end_mar\
+                      + b"MUH" \
+                      )
+    print(ret == b'', ret)
+    print(piggy == b'MUH' + end_mar + b'MUH', piggy)
+# one_packet_start_marker_piggy_end_marker()
+
+def test_one_packet_piggy__pref_suff():
+    global piggy
+    ret = do_oink(
+                        b"abc" \
+                      + start_marker \
+                      + b"MUH" \
+                      + end_marker \
+                      + b"xyz"
+                      )
+    print(piggy == b'MUH', piggy)
+    print(ret == b'abc'+b'xyz', ret)
+# test_one_packet_piggy__pref_suff()
+
+def test_one_packet_double_markerstart():
+    global piggy
+    ret = do_oink(
+                    2*start_marker[0:1]
+                      )
+    print(piggy == b'', piggy)
+    print(ret == b'__', ret)
+    print()
+# test_one_packet_double_markerstart()
+
+def test_two_packet_double_markerstart():
+    global piggy
+    ret = do_oink(
+                    start_marker[0:1]
+                      )
+    print(piggy == b'', piggy)
+    print(ret == b'', ret)
+
+    ret = do_oink(
+                    start_marker[0:1]
+                      )
+    print(piggy == b'', piggy)
+    print(ret == b'__', ret)
+# test_two_packet_double_markerstart()
+
+def test_two_packet_pref_start_marker_piggy_eop_piggy_end_marker_suff():
+    global piggy
+    ret = do_oink(
+                        b"abc" \
+                      + start_marker \
+                      + b"MUH" \
+                      )
+    print(ret == b'abc', ret)
+    print(piggy == b'MUH', piggy)
+
+    ret = do_oink(
+                        b"MUH" \
+                      + end_marker \
+                      + b"xyz" \
+                      )
+
+    print(ret == b'xyz', ret)
+    print(piggy == b'MUHMUH', piggy)
+# test_two_packet_pref_start_marker_piggy_eop_piggy_end_marker_suff()
+
+def test_two_packet_pref_start_marker_piggy_eop_end_marker_suff():
+    global piggy
+    ret = do_oink(
+                        b"abc" \
+                      + start_marker \
+                      + b"MUH" \
+                      )
+    print(ret == b'abc', ret)
+    print(piggy == b'MUH', piggy)
+
+    ret = do_oink(
+                        end_marker \
+                      + b"xyz" \
+                      )
+
+    print(ret == b'xyz', ret)
+    print(piggy == b'MUH', piggy)
+# test_two_packet_pref_start_marker_piggy_eop_end_marker_suff()
+
+def test_two_packet_pref_start_marker_eop_piggy_end_marker_suff():
+    global piggy
+    ret = do_oink( 
+                        b"abc" \
+                      + start_marker \
+                      )
+    print(ret == b'abc', ret)
+    print(piggy == b'', piggy)
+
+    ret = do_oink( 
+                        b"MUH" \
+                      + end_marker \
+                      + b"xyz" \
+                      )
+
+    print(ret == b'xyz', ret)
+    print(piggy == b'MUH', piggy)
+# test_two_packet_pref_start_marker_eop_piggy_end_marker_suff()
+
+def test_onechar_start__onechar_cancel_start():
+    global piggy
+    ret = do_oink( 
+                    b'_'
+                      )
+    print(ret == b'', ret)
+    print(piggy == b'', piggy)
+    ret = do_oink( 
+                        b'M' \
+                      )
+    print(ret == b'_M', ret)
+    print(piggy == b'', piggy)
+# test_onechar_start__onechar_cancel_start()
+
+# import types
+# bla = globals().copy()
+# for k,v in bla.items():
+#     if isinstance(v,  types.FunctionType):
+#         if k.startswith('test'):
+#             print()
+#             print('.oO ', k, ' Oo.\n')
+#             v.__call__()
