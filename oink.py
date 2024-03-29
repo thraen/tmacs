@@ -67,26 +67,27 @@ def do_oink(arr):
             j+=1
             hold.append( x )
 
-            if j == len(marker):
-                if marker == end_marker:  # piggy mode
+            if j == len(marker):               # marker entirely read
+                if marker == end_marker:       # we are in piggy mode
                     piggy_end()
 
                 marker = alternate_marker(marker)
-                print('  full marker read, now waiting for', marker)
+                print('  entire marker read. now waiting for', marker)
                 j = 0
                 hold = bytearray(b'')
 
         else:
 #             print(chr(x), i, j, marker[j], '  no marker or cancel marker')
-            if marker == end_marker:    #            piggy mode
-                if j > 0:
-                    piggy = piggy + hold## fuck malloc
+            if marker == end_marker:           # piggy mode
+                if j > 0:                      # marker partly read and cancelling marker
+                    piggy = piggy + hold       # release the hold
                 piggy.append( x )
-            else: # if marker == start_marker        transparent mode
-                if j > 0:
-                    ret = ret + hold ## fuck malloc
+            else: # if marker == start_marker    transparent mode
+                if j > 0:                      # marker partly read and cancelling marker
+                    ret = ret + hold           # release the hold
                 ret.append( x )
-            j = 0 # cancel marker start
+
+            j = 0 # cancel marker start 
             hold = bytearray(b'')
 
     return ret
