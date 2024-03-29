@@ -178,7 +178,7 @@ if __name__ == "__main__":
     naus_thread = Thread(target = write_naus)
     naus_thread.start()
 
-    mypty.spawn("/bin/bash", master_read, stdin_read)
+    mypty.spawn("/bin/zsh", master_read, stdin_read)
 #     mypty.spawn("/usr/local/bin/nvim", master_read, stdin_read)
 
     print('quitting')
