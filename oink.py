@@ -169,11 +169,11 @@ def write_naus():
 
 if __name__ == "__main__":
     print('\n\n\n\n')
-    ensure_fifo('/tmp/naus')
-    ensure_fifo('/tmp/nei')
+    ensure_fifo('/tmp/naus'+os.getpid())
+    ensure_fifo('/tmp/nei'+os.getpid())
 
-    nei_thread = Thread(target = read_nei)
-    nei_thread.start()
+#     nei_thread = Thread(target = read_nei)
+#     nei_thread.start()
 
     naus_thread = Thread(target = write_naus)
     naus_thread.start()
@@ -184,5 +184,5 @@ if __name__ == "__main__":
     print('quitting')
     qquit = True
 
-    nei_thread.join()
+#     nei_thread.join()
     naus_thread.join()

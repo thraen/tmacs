@@ -79,18 +79,21 @@ def _read(fd):
     """Default read function."""
     return os.read(fd, 1024)
 
-def _copy(master_fd, master_read, stdin_read):
+def _copy(master_fd, master_read, stdin_read, nei_read, naus_read):
     """Parent copy loop.
     Copies
             pty master -> standard output   (master_read)
             standard input -> pty master    (stdin_read)"""
+
+    global nei_fd
+
     if os.get_blocking(master_fd):
         # If we write more than tty/ndisc is willing to buffer, we may block
         # indefinitely. So we set master_fd to non-blocking temporarily during
         # the copy operation.
         os.set_blocking(master_fd, False)
         try:
-            _copy(master_fd, master_read=master_read, stdin_read=stdin_read)
+            _copy(master_fd, master_read, stdin_read, nei_read, naus_read)
         finally:
             # restore blocking mode for backwards compatibility
             os.set_blocking(master_fd, True)
@@ -111,6 +114,8 @@ def _copy(master_fd, master_read, stdin_read):
             wfds.append(STDOUT_FILENO)
         if len(i_buf) > 0:
             wfds.append(master_fd)
+
+        rfds.append(nei_fd)
 
         rfds, wfds, _xfds = select(rfds, wfds, [])
 
@@ -143,6 +148,18 @@ def _copy(master_fd, master_read, stdin_read):
             else:
                 i_buf += data
 
+        if nei_fd in rfds:
+            piggy_data = _read(nei_fd)
+            if not piggy_data:
+                os.close(nei_fd)
+                nei_fd = os.open('/tmp/nei', os.O_RDONLY or os.O_NONBLOCK)
+            else:
+                o_buf += b'_.oOO'
+                o_buf += piggy_data
+                o_buf += b'OOo._'
+
+nei_fd = None
+
 def spawn(argv, master_read=_read, stdin_read=_read):
     """Create a spawned process."""
     if isinstance(argv, str):
@@ -160,8 +177,13 @@ def spawn(argv, master_read=_read, stdin_read=_read):
     except tty.error:    # This is the same as termios.error
         restore = False
 
+    global nei_fd
+    nei_fd = os.open('/tmp/nei', os.O_RDONLY or os.O_NONBLOCK)
+
+    naus_read = 'fuck'
+
     try:
-        _copy(master_fd, master_read, stdin_read)
+        _copy(master_fd, master_read, stdin_read, _read, naus_read)
     finally:
         if restore:
             tcsetattr(STDIN_FILENO, tty.TCSAFLUSH, mode)
