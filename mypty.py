@@ -152,41 +152,9 @@ def _copy(master_fd, master_read, stdin_read, nei_read, naus_read):
             piggy_data = _read(nei_fd)
             if not piggy_data:
                 os.close(nei_fd)
-                nei_fd = os.open('/tmp/nei', os.O_RDONLY or os.O_NONBLOCK)
+                nei_fd = os.open(nei_fn, os.O_RDONLY or os.O_NONBLOCK)
             else:
                 o_buf += b'_.oOO'
                 o_buf += piggy_data
                 o_buf += b'OOo._'
 
-nei_fd = None
-
-def spawn(argv, master_read=_read, stdin_read=_read):
-    """Create a spawned process."""
-    if isinstance(argv, str):
-        argv = (argv,)
-    sys.audit('pty.spawn', argv)
-
-    pid, master_fd = fork()
-    if pid == CHILD:
-        os.execlp(argv[0], *argv)
-
-    try:
-        mode = tcgetattr(STDIN_FILENO)
-        setraw(STDIN_FILENO)
-        restore = True
-    except tty.error:    # This is the same as termios.error
-        restore = False
-
-    global nei_fd
-    nei_fd = os.open('/tmp/nei', os.O_RDONLY or os.O_NONBLOCK)
-
-    naus_read = 'fuck'
-
-    try:
-        _copy(master_fd, master_read, stdin_read, _read, naus_read)
-    finally:
-        if restore:
-            tcsetattr(STDIN_FILENO, tty.TCSAFLUSH, mode)
-
-    close(master_fd)
-    return waitpid(pid, 0)[1]
