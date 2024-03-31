@@ -21,9 +21,6 @@ from threading import Thread
 blamaster = open('/tmp/blamaster', 'ab')
 blastdin  = open('/tmp/blastdin',  'ab')
 
-nei_fn  = '/tmp/nei'  + str(os.getpid())
-naus_fn = '/tmp/naus' + str(os.getpid())
-
 log = open('/tmp/thrcliplog', 'a')
 oprint = print
 def print(*args):
@@ -40,6 +37,7 @@ piggy = bytearray(b'')
 
 marker = start_marker
 j = 0
+
 
 qquit = False
 
@@ -106,11 +104,6 @@ def quote(fn):
     """quoting bytes-strings"""
     return shlex.quote(fn.decode('utf8')).encode('utf8')
 
-def stdin_read(fd):
-    data = os.read(fd, 1024)
-#     blastdin.write(data) 
-#     blastdin.flush()
-    return data
 
 termsize = ()
 def set_winsize(fd, row, col, xpix=0, ypix=0):
@@ -126,18 +119,16 @@ def master_read(fd):
         set_winsize(fd, termsize[1], termsize[0])
 
     dat = os.read(fd, 1024)
-
 #     blamaster.write(dat) 
 #     blamaster.flush()
 
-    ret = do_oink(dat)
-#     for i, dati in enumerate(dat):
-#         reti = ret[i]
-#         if reti != dati:
-#             print('dif', i,dati,reti,dat[i-1], ret[i-1])
-#     print(len(ret), len(dat))
+    if local:
+        print('local  master_read', dat)
+        return do_oink(dat)
+    else:
+        print('remote master_read', dat)
+        return dat
 
-    return ret
 
 def write_naus():
     global qquit
@@ -183,10 +174,8 @@ def spawn(argv, master_read, stdin_read):
     global nei_fd
     nei_fd = os.open(nei_fn, os.O_RDONLY or os.O_NONBLOCK)
 
-    naus_read = 'fuck'
-
     try:
-        _copy(master_fd, master_read, stdin_read, _read, naus_read)
+        _copy(master_fd, master_read, stdin_read, _read)
     finally:
         if restore:
             tcsetattr(STDIN_FILENO, tty.TCSAFLUSH, mode)
@@ -194,13 +183,27 @@ def spawn(argv, master_read, stdin_read):
     os.close(master_fd)
     return os.waitpid(pid, 0)[1]
 
-
-
 def _read(fd):
     """Default read function."""
     return os.read(fd, 1024)
 
-def _copy(master_fd, master_read, stdin_read, nei_read, naus_read):
+## Remoteward we piggyback on stdin
+## that means for stdin_read: 
+## when we run remotely, we look out on stdin for markers
+## and when we run locally, we are transparent
+def stdin_read(fd):
+    data = os.read(fd, 1024)
+#     blastdin.write(data) 
+#     blastdin.flush()
+
+    if local:
+        print('local  stdin_read', data)
+        return data
+    else:
+        print('remote stdin_read', data)
+        return do_oink(data)
+
+def _copy(master_fd, master_read, stdin_read, nei_read):
     """Parent copy loop.
     Copies
             pty master -> standard output   (master_read)
@@ -214,7 +217,7 @@ def _copy(master_fd, master_read, stdin_read, nei_read, naus_read):
         # the copy operation.
         os.set_blocking(master_fd, False)
         try:
-            _copy(master_fd, master_read, stdin_read, nei_read, naus_read)
+            _copy(master_fd, master_read, stdin_read, nei_read)
         finally:
             # restore blocking mode for backwards compatibility
             os.set_blocking(master_fd, True)
@@ -275,14 +278,28 @@ def _copy(master_fd, master_read, stdin_read, nei_read, naus_read):
                 os.close(nei_fd)
                 nei_fd = os.open(nei_fn, os.O_RDONLY or os.O_NONBLOCK)
             else:
-                o_buf += b'_.oOO'
-                o_buf += piggy_data
-                o_buf += b'OOo._'
-
-
+                if local:
+                    print('local  request to send', piggy_data)
+                    i_buf += b'_.oOO'
+                    i_buf += piggy_data
+                    i_buf += b'OOo._'
+                else: # remote
+                    print('remote request to send', piggy_data)
+                    o_buf += b'_.oOO'
+                    o_buf += piggy_data
+                    o_buf += b'OOo._'
 
 if __name__ == "__main__":
     print('\n\n\n\n')
+    local = True # are we the local transmission unit or the gegenstelle
+    nei_fn  = '/tmp/nei'
+    naus_fn = '/tmp/naus'
+
+    if len(sys.argv) > 1:
+        local = False
+        nei_fn  = '/tmp/nei_gegenstelle'
+        naus_fn = '/tmp/naus_gegenstelle'
+
     ensure_fifo(naus_fn)
     ensure_fifo(nei_fn)
 
