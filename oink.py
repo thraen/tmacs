@@ -292,7 +292,7 @@ if __name__ == "__main__":
     naus_thread = Thread(target = write_naus)
     naus_thread.start()
 
-    spawn("/bin/zsh", master_read, stdin_read)
+    spawn("/bin/bash", master_read, stdin_read)
 #     spawn("/usr/local/bin/nvim", master_read, stdin_read)
 
     print('quitting')
