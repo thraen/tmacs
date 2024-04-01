@@ -18,9 +18,6 @@ import time
 import queue
 from threading import Thread
 
-blamaster = open('/tmp/blamaster', 'ab')
-blastdin  = open('/tmp/blastdin',  'ab')
-
 log = open('/tmp/thrcliplog', 'a')
 oprint = print
 def print(*args):
@@ -128,7 +125,6 @@ def master_read(fd):
     else:
         return data, False
 
-
 def write_naus():
     global qquit
     global Qnaus
@@ -192,8 +188,6 @@ def _read(fd):
 ## and when we run locally, we are transparent
 def stdin_read(fd):
     data = os.read(fd, 1024)
-#     blastdin.write(data) 
-#     blastdin.flush()
 
     print(where, 'stdin_read', data)
     if local:
