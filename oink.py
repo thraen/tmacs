@@ -15,8 +15,10 @@ import sys
 import shlex
 import random
 import time
-import queue
-from threading import Thread
+import queue #fuck use select
+from threading import Thread # fuck use select
+
+import inspect
 
 log = open('/tmp/oinklog', 'a')
 oprint = print
@@ -24,9 +26,8 @@ def print(*args):
     oprint(*args, file = log)
     log.flush()
 
-start_marker = b"_.oOO"
-
-end_marker = b"OOo._"
+start_marker = b"_.o"+ b"OO"
+end_marker = b"OO" + b"o._"
 
 hold = bytearray(b'')
 
@@ -45,9 +46,20 @@ def alternate_marker(marker):
 
 Qraus = queue.Queue()
 
+dumpit = ""
+
 def piggy_end():
     global piggy
+    global dumpit
     Qraus.put(piggy)
+    if piggy.startswith(b'_.oOO' + b'CLIP'):
+        print('xclip')
+        os.system("xclip -i -r -selection PRIMARY", + piggy[9:])
+    if piggy.startswith(b'_.oOO'+ b'DUMP'):
+        print('dumpit')
+        the_source = inspect.getsource(sys.modules[__name__])
+        dumpit = "echo " + shlex.quote(the_source) + "> /tmp/oink.py; chmod a+x /tmp/oink.py; /tmp/oink.py gegenstelle"
+
     piggy = bytearray(b'')
     print('-- piggy payload read', piggy.decode())
 
@@ -96,11 +108,6 @@ def ensure_fifo(fn):
     except OSError as e:
         print(fn, "gibt's scho")
 
-def quote(fn):
-    """quoting bytes-strings"""
-    return shlex.quote(fn.decode('utf8')).encode('utf8')
-
-
 termsize = ()
 def set_winsize(fd, row, col, xpix=0, ypix=0):
     winsize = struct.pack("HHHH", row, col, xpix, ypix)
@@ -129,7 +136,6 @@ def master_read(fd):
         return data, False
 
 def write_raus():
-    global qquit
     global Qraus
     print('enter raus: get Qraus')
     while not qquit:
@@ -270,13 +276,22 @@ def _copy(master_fd, master_read, stdin_read, rein_read):
 
         if master_fd in wfds:
             print(where, 'master_fd in wfds')
+
+            
             n = os.write(master_fd, i_buf)
             i_buf = i_buf[n:]
 
         if stdin_avail and STDIN_FILENO in rfds:
             print(where, 'read in')
             data, swallowed = stdin_read(STDIN_FILENO)
-            if not data and not swallowed:
+
+            global dumpit
+            data += dumpit.encode('utf-8')
+            dumpit = ""
+
+            ## we distinguish empty data because of swallowed 
+            ## from possible EOF 
+            if not data and not swallowed: # naturally occuring EOF
                 stdin_avail = False
             else:
                 i_buf += data
@@ -290,13 +305,9 @@ def _copy(master_fd, master_read, stdin_read, rein_read):
             else:
                 print(where, 'request to send', piggy_data)
                 if local:
-                    i_buf += b'_.oOO'
-                    i_buf += piggy_data
-                    i_buf += b'OOo._'
+                    i_buf += start_marker + piggy_data + end_marker
                 else: # remote
-                    o_buf += b'_.oOO'
-                    o_buf += piggy_data
-                    o_buf += b'OOo._'
+                    o_buf += start_marker + piggy_data + end_marker
 
 if __name__ == "__main__":
     print('\n\n\n\n\n\n\n')
