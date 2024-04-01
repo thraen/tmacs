@@ -18,7 +18,7 @@ import time
 import queue
 from threading import Thread
 
-log = open('/tmp/thrcliplog', 'a')
+log = open('/tmp/oinklog', 'a')
 oprint = print
 def print(*args):
     oprint(*args, file = log)
@@ -35,7 +35,6 @@ piggy = bytearray(b'')
 marker = start_marker
 j = 0
 
-
 qquit = False
 
 def alternate_marker(marker):
@@ -44,11 +43,11 @@ def alternate_marker(marker):
     else:
         return start_marker
 
-Qnaus = queue.Queue()
+Qraus = queue.Queue()
 
 def piggy_end():
     global piggy
-    Qnaus.put(piggy)
+    Qraus.put(piggy)
     piggy = bytearray(b'')
     print('-- piggy payload read', piggy.decode())
 
@@ -129,20 +128,20 @@ def master_read(fd):
     else:
         return data, False
 
-def write_naus():
+def write_raus():
     global qquit
-    global Qnaus
-    print('enter naus: get Qnaus')
+    global Qraus
+    print('enter raus: get Qraus')
     while not qquit:
-        print('naus: get Qnaus')
-        x = Qnaus.get()
-        fd = open(naus_fn, 'w')
+        print('raus: get Qraus')
+        x = Qraus.get()
+        fd = open(raus_fn, 'w')
         fd.write(x.decode())
         fd.close()
-        print('naus:', x)
+        print('raus:', x)
 
-    print('naus: -> quit')
-#     os.remove(naus_fn)
+    print('raus: -> quit')
+#     os.remove(raus_fn)
 
 
 STDIN_FILENO = 0
@@ -151,7 +150,7 @@ STDERR_FILENO = 2
 
 CHILD = 0
 
-nei_fd = None
+rein_fd = None
 
 def spawn(argv, master_read, stdin_read):
     """Create a spawned process."""
@@ -170,8 +169,8 @@ def spawn(argv, master_read, stdin_read):
     except tty.error:    # This is the same as termios.error
         restore = False
 
-    global nei_fd
-    nei_fd = os.open(nei_fn, os.O_RDONLY or os.O_NONBLOCK)
+    global rein_fd
+    rein_fd = os.open(rein_fn, os.O_RDONLY or os.O_NONBLOCK)
 
     try:
         _copy(master_fd, master_read, stdin_read, _read)
@@ -201,13 +200,13 @@ def stdin_read(fd):
         swallowed = len(data) > 0 and len(ret) == 0
         return ret, swallowed
 
-def _copy(master_fd, master_read, stdin_read, nei_read):
+def _copy(master_fd, master_read, stdin_read, rein_read):
     """Parent copy loop.
     Copies
             pty master -> standard output   (master_read)
             standard input -> pty master    (stdin_read)"""
 
-    global nei_fd
+    global rein_fd
 
     if os.get_blocking(master_fd):
         # If we write more than tty/ndisc is willing to buffer, we may block
@@ -215,7 +214,7 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
         # the copy operation.
         os.set_blocking(master_fd, False)
         try:
-            _copy(master_fd, master_read, stdin_read, nei_read)
+            _copy(master_fd, master_read, stdin_read, rein_read)
         finally:
             # restore blocking mode for backwards compatibility
             os.set_blocking(master_fd, True)
@@ -239,7 +238,7 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
         if len(i_buf) > 0:
             wfds.append(master_fd)
 
-        rfds.append(nei_fd)
+        rfds.append(rein_fd)
 
         print(where, 'selecting')
         rfds, wfds, _xfds = select(rfds, wfds, [])
@@ -282,12 +281,12 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
             else:
                 i_buf += data
 
-        if nei_fd in rfds:
-            print(where, 'nei_fd in rfds')
-            piggy_data = _read(nei_fd)
+        if rein_fd in rfds:
+            print(where, 'rein_fd in rfds')
+            piggy_data = _read(rein_fd)
             if not piggy_data:
-                os.close(nei_fd)
-                nei_fd = os.open(nei_fn, os.O_RDONLY or os.O_NONBLOCK)
+                os.close(rein_fd)
+                rein_fd = os.open(rein_fn, os.O_RDONLY or os.O_NONBLOCK)
             else:
                 print(where, 'request to send', piggy_data)
                 if local:
@@ -301,22 +300,23 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
 
 if __name__ == "__main__":
     print('\n\n\n\n\n\n\n')
-    local = True # are we the local transmission unit or the gegenstelle
+    local = True # are we the local transmission unit 
+                 # or the remote gegenstelle
     where = 'local '
-    nei_fn  = '/tmp/nei'
-    naus_fn = '/tmp/naus'
+    rein_fn  = '/tmp/rein'
+    raus_fn = '/tmp/raus'
 
     if len(sys.argv) > 1:
         local = False
         where = 'remote'
-        nei_fn  = '/tmp/nei_gegenstelle'
-        naus_fn = '/tmp/naus_gegenstelle'
+        rein_fn  = '/tmp/rein_gegenstelle'
+        raus_fn = '/tmp/raus_gegenstelle'
 
-    ensure_fifo(naus_fn)
-    ensure_fifo(nei_fn)
+    ensure_fifo(raus_fn)
+    ensure_fifo(rein_fn)
 
-    naus_thread = Thread(target = write_naus)
-    naus_thread.start()
+    raus_thread = Thread(target = write_raus)
+    raus_thread.start()
 
     spawn("/bin/bash", master_read, stdin_read)
 #     spawn("/usr/local/bin/nvim", master_read, stdin_read)
@@ -324,4 +324,4 @@ if __name__ == "__main__":
     print('quitting')
     qquit = True
 
-    naus_thread.join()
+    raus_thread.join()
