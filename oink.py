@@ -107,6 +107,10 @@ def set_winsize(fd, row, col, xpix=0, ypix=0):
     winsize = struct.pack("HHHH", row, col, xpix, ypix)
     fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
 
+## Remoteward we piggyback on stdin, localward we piggyback on stdout
+## It means for master_read: 
+## * when we run locally  -> master_read looks for piggy data
+## * when we run remotely -> master_read is transparent
 def master_read(fd):
     global termsize
 
@@ -182,10 +186,10 @@ def _read(fd):
     """Default read function."""
     return os.read(fd, 1024)
 
-## Remoteward we piggyback on stdin
-## that means for stdin_read: 
-## when we run remotely, we look out on stdin for markers
-## and when we run locally, we are transparent
+## Remoteward we piggyback on stdin, localward we piggyback on stdout
+## It means for stdin_read: 
+## * we run remotely ->  stdin_read looks out for piggy data
+## * we run locally  ->  stdin_read is transparent
 def stdin_read(fd):
     data = os.read(fd, 1024)
 
@@ -311,9 +315,6 @@ if __name__ == "__main__":
     ensure_fifo(naus_fn)
     ensure_fifo(nei_fn)
 
-#     nei_thread = Thread(target = read_nei)
-#     nei_thread.start()
-
     naus_thread = Thread(target = write_naus)
     naus_thread.start()
 
@@ -323,5 +324,4 @@ if __name__ == "__main__":
     print('quitting')
     qquit = True
 
-#     nei_thread.join()
     naus_thread.join()
