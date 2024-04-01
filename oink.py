@@ -119,8 +119,6 @@ def master_read(fd):
         set_winsize(fd, termsize[1], termsize[0])
 
     data = os.read(fd, 1024)
-#     blamaster.write(data) 
-#     blamaster.flush()
 
     print(where,'master_read', data)
     if local:
@@ -262,12 +260,13 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
             # Some OSes signal EOF by returning an empty byte string,
             # some throw OSErrors.
             try:
-            ## fuck: we should distinguish empty data
-            ## because we swallowed marker from possible EOF
-            ## fuck on real empty data we should return
+                ## we should distinguish empty data because of swallowed 
+                ## from possible EOF
                 data, swallowed = master_read(master_fd)
+                if not data and not swallowed:
+                    return
             except OSError:
-                print('fucking OSError')
+                print('OSError out')
                 return    # Assume the child process has exited and is
                           # unreachable, so we clean up.
             o_buf += data
@@ -280,8 +279,6 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
         if stdin_avail and STDIN_FILENO in rfds:
             print(where, 'read in')
             data, swallowed = stdin_read(STDIN_FILENO)
-            ## fuck: we should distinguish empty data
-            ## because we swallowed marker from possible EOF
             if not data and not swallowed:
                 stdin_avail = False
             else:
