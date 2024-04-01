@@ -60,7 +60,7 @@ def do_oink(arr):
     global marker
     global hold
     global piggy
-    print('reading', arr.decode(), 'holding', hold.decode())
+    print(where, 'do_ink', arr, 'holding', hold)
     ret = bytearray(b'')
 
     for i, x in enumerate(arr):
@@ -118,16 +118,17 @@ def master_read(fd):
         termsize = ts
         set_winsize(fd, termsize[1], termsize[0])
 
-    dat = os.read(fd, 1024)
-#     blamaster.write(dat) 
+    data = os.read(fd, 1024)
+#     blamaster.write(data) 
 #     blamaster.flush()
 
+    print(where,'master_read', data)
     if local:
-        print('local  master_read', dat)
-        return do_oink(dat)
+        ret = do_oink(data)
+        swallowed = len(data) > 0 and len(ret) == 0
+        return ret, swallowed
     else:
-        print('remote master_read', dat)
-        return dat
+        return data, False
 
 
 def write_naus():
@@ -196,12 +197,13 @@ def stdin_read(fd):
 #     blastdin.write(data) 
 #     blastdin.flush()
 
+    print(where, 'stdin_read', data)
     if local:
-        print('local  stdin_read', data)
-        return data
+        return data, False
     else:
-        print('remote stdin_read', data)
-        return do_oink(data)
+        ret = do_oink(data)
+        swallowed = len(data) > 0 and len(ret) == 0
+        return ret, swallowed
 
 def _copy(master_fd, master_read, stdin_read, nei_read):
     """Parent copy loop.
@@ -230,6 +232,8 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
     while 1:
         rfds = []
         wfds = []
+        print(where, 'stdin_avail', stdin_avail, 'stdout_avail', stdout_avail, len(i_buf), len(o_buf))
+
         if stdin_avail and len(i_buf) < high_waterlevel:
             rfds.append(STDIN_FILENO)
         if stdout_avail and len(o_buf) < high_waterlevel:
@@ -241,9 +245,12 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
 
         rfds.append(nei_fd)
 
+        print(where, 'selecting')
         rfds, wfds, _xfds = select(rfds, wfds, [])
+        print(where, 'selected')
 
         if STDOUT_FILENO in wfds:
+            print(where, 'write out', o_buf)
             try:
                 n = os.write(STDOUT_FILENO, o_buf)
                 o_buf = o_buf[n:]
@@ -251,10 +258,14 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
                 stdout_avail = False
 
         if master_fd in rfds:
+            print(where, 'master_fd in rfds')
             # Some OSes signal EOF by returning an empty byte string,
             # some throw OSErrors.
             try:
-                data = master_read(master_fd)
+            ## fuck: we should distinguish empty data
+            ## because we swallowed marker from possible EOF
+            ## fuck on real empty data we should return
+                data, swallowed = master_read(master_fd)
             except OSError:
                 print('fucking OSError')
                 return    # Assume the child process has exited and is
@@ -262,41 +273,47 @@ def _copy(master_fd, master_read, stdin_read, nei_read):
             o_buf += data
 
         if master_fd in wfds:
+            print(where, 'master_fd in wfds')
             n = os.write(master_fd, i_buf)
             i_buf = i_buf[n:]
 
         if stdin_avail and STDIN_FILENO in rfds:
-            data = stdin_read(STDIN_FILENO)
-            if not data:
+            print(where, 'read in')
+            data, swallowed = stdin_read(STDIN_FILENO)
+            ## fuck: we should distinguish empty data
+            ## because we swallowed marker from possible EOF
+            if not data and not swallowed:
                 stdin_avail = False
             else:
                 i_buf += data
 
         if nei_fd in rfds:
+            print(where, 'nei_fd in rfds')
             piggy_data = _read(nei_fd)
             if not piggy_data:
                 os.close(nei_fd)
                 nei_fd = os.open(nei_fn, os.O_RDONLY or os.O_NONBLOCK)
             else:
+                print(where, 'request to send', piggy_data)
                 if local:
-                    print('local  request to send', piggy_data)
                     i_buf += b'_.oOO'
                     i_buf += piggy_data
                     i_buf += b'OOo._'
                 else: # remote
-                    print('remote request to send', piggy_data)
                     o_buf += b'_.oOO'
                     o_buf += piggy_data
                     o_buf += b'OOo._'
 
 if __name__ == "__main__":
-    print('\n\n\n\n')
+    print('\n\n\n\n\n\n\n')
     local = True # are we the local transmission unit or the gegenstelle
+    where = 'local '
     nei_fn  = '/tmp/nei'
     naus_fn = '/tmp/naus'
 
     if len(sys.argv) > 1:
         local = False
+        where = 'remote'
         nei_fn  = '/tmp/nei_gegenstelle'
         naus_fn = '/tmp/naus_gegenstelle'
 
