@@ -46,19 +46,12 @@ def alternate_marker(marker):
 
 Qraus = queue.Queue()
 
-dumpit = ""
-
 def piggy_end():
     global piggy
-    global dumpit
     Qraus.put(piggy)
-    if piggy.startswith(b'_.oOO' + b'CLIP'):
+    if piggy.startswith(start_marker + b'CLIP'):
         print('xclip')
-        os.system("xclip -i -r -selection PRIMARY", + piggy[9:])
-    if piggy.startswith(b'_.oOO'+ b'DUMP'):
-        print('dumpit')
-        the_source = inspect.getsource(sys.modules[__name__])
-        dumpit = "echo " + shlex.quote(the_source) + "> /tmp/oink.py; chmod a+x /tmp/oink.py; /tmp/oink.py gegenstelle"
+        os.system("xclip -i -r -selection PRIMARY", + piggy[9:].decode('utf-8'))
 
     piggy = bytearray(b'')
     print('-- piggy payload read', piggy.decode())
@@ -191,6 +184,17 @@ def _read(fd):
     """Default read function."""
     return os.read(fd, 1024)
 
+def getchar():
+    #Returns a single character from standard input
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.buffer.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
 ## Remoteward we piggyback on stdin, localward we piggyback on stdout
 ## It means for stdin_read: 
 ## * we run remotely ->  stdin_read looks out for piggy data
@@ -200,6 +204,17 @@ def stdin_read(fd):
 
     print(where, 'stdin_read', data)
     if local:
+        if (data == b'\x02'):  # C-b ## todo better listen to controlling fifo
+            next_char = getchar()
+            if (next_char == b'\x02'): 
+                return b'\x02', False
+            if (next_char == b'b'):
+                the_source = inspect.getsource(sys.modules[__name__])
+                tmp = "stty -echo\n HISTCONTROL=ignoreboth echo " + shlex.quote(the_source) + "> /tmp/oink.py; chmod a+x /tmp/oink.py; stty echo\n /tmp/oink.py gegenstelle\n"
+                return tmp.encode("utf-8"), False
+
+            return b'\x02'+next_char, False
+
         return data, False
     else:
         ret = do_oink(data)
@@ -276,18 +291,12 @@ def _copy(master_fd, master_read, stdin_read, rein_read):
 
         if master_fd in wfds:
             print(where, 'master_fd in wfds')
-
-            
             n = os.write(master_fd, i_buf)
             i_buf = i_buf[n:]
 
         if stdin_avail and STDIN_FILENO in rfds:
             print(where, 'read in')
             data, swallowed = stdin_read(STDIN_FILENO)
-
-            global dumpit
-            data += dumpit.encode('utf-8')
-            dumpit = ""
 
             ## we distinguish empty data because of swallowed 
             ## from possible EOF 
