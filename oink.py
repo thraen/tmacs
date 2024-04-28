@@ -26,8 +26,11 @@ def print(*args):
     oprint(*args, file = log)
     log.flush()
 
-start_marker = b"_.o"+ b"OO"
-end_marker = b"OO" + b"o._"
+start_marker = b"\x1F_.o"+ b"OO"
+end_marker = b"\x1FOO" + b"o._"
+# start_marker = b"_.o"+ b"OO"
+# end_marker = b"OO" + b"o._"
+clip_marker = b"C"
 
 hold = bytearray(b'')
 
@@ -38,20 +41,47 @@ j = 0
 
 qquit = False
 
+active = False
+
 def alternate_marker(marker):
     if marker == start_marker:
         return end_marker
     else:
         return start_marker
 
-Qraus = queue.Queue()
+# Qraus = queue.Queue()
+
 
 def piggy_end():
     global piggy
-    Qraus.put(piggy)
-    if piggy.startswith(start_marker + b'CLIP'):
-        print('xclip')
-        os.system("xclip -i -r -selection PRIMARY", + piggy[9:].decode('utf-8'))
+    print(where, 'piggy_end', piggy)
+#     Qraus.put(piggy)
+
+    ## the fifo blocks, if nothing reads from it.
+    #     fd = open(raus_fn, 'w')
+    #     fd.write(piggy.decode('utf-8'))
+    #     fd.close()
+
+    if local:
+        import subprocess
+        print(where, 'calling xclip with', piggy)
+        clipcmdv = "xclip -i -r -selection PRIMARY".split(' ')
+
+        p = subprocess.Popen(clipcmdv, stdin=subprocess.PIPE)
+        p.communicate(input= piggy)[0]
+    else:
+        print(where, 'print write to lastclip', piggy)
+        with open("/tmp/lastclip", 'wb') as lastclipf:
+            lastclipf.write(piggy)
+
+#     if piggy.startswith(start_marker + clip_marker):
+#         print('clipboard marker read, setting clipboard')
+#         offset = len(start_marker) + len(clip_marker)
+#         clipb = piggy[offset:]
+#         os.system("xclip -i -r -selection PRIMARY", + clipb.decode('utf-8'))
+#         with fopen("/tmp/lastclip", 'wb') as lastclipf:
+#             lastclipf.write(clipb)
+
 
     piggy = bytearray(b'')
     print('-- piggy payload read', piggy.decode())
@@ -121,7 +151,12 @@ def master_read(fd):
     data = os.read(fd, 1024)
 
     print(where,'master_read', data)
-    if local:
+    ## If the gegenstelle is not running and thus not 
+    ## supressing markers, local echo from bash will arrive here.
+    ## We only want it to arrive at remote stdout, not here.
+    ## So we only start interpreting markers from stdout if gegenstelle
+    ## has been started (active = true)
+    if local and active:
         ret = do_oink(data)
         swallowed = len(data) > 0 and len(ret) == 0
         return ret, swallowed
@@ -152,7 +187,7 @@ CHILD = 0
 rein_fd = None
 
 def spawn(argv, master_read, stdin_read):
-    """Create a spawned process."""
+    print('spawn', argv[0], argv)
     if isinstance(argv, str):
         argv = (argv,)
 #     sys.audit('pty.spawn', argv)
@@ -205,6 +240,8 @@ def stdin_read(fd):
     print(where, 'stdin_read', data)
     if local:
         if (data == b'\x02'):  # C-b ## todo better listen to controlling fifo
+            global active
+            active = True
             next_char = getchar()
             if (next_char == b'\x02'): 
                 return b'\x02', False
@@ -314,7 +351,8 @@ def _copy(master_fd, master_read, stdin_read, rein_read):
             else:
                 print(where, 'request to send', piggy_data)
                 if local:
-                    i_buf += start_marker + piggy_data + end_marker
+                    if active:
+                        i_buf += start_marker + piggy_data + end_marker
                 else: # remote
                     o_buf += start_marker + piggy_data + end_marker
 
@@ -329,19 +367,21 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         local = False
         where = 'remote'
-        rein_fn  = '/tmp/rein_gegenstelle'
+        rein_fn = '/tmp/rein_gegenstelle'
         raus_fn = '/tmp/raus_gegenstelle'
 
     ensure_fifo(raus_fn)
     ensure_fifo(rein_fn)
 
-    raus_thread = Thread(target = write_raus)
-    raus_thread.start()
+#     raus_thread = Thread(target = write_raus)
+#     raus_thread.start()
 
-    spawn("/bin/bash", master_read, stdin_read)
+    cmdv = "/bin/bash --rcfile ~/.brc_thr".split(' ')
+    spawn(cmdv, master_read, stdin_read)
+#     spawn("/bin/bash", master_read, stdin_read)
 #     spawn("/usr/local/bin/nvim", master_read, stdin_read)
 
     print('quitting')
     qquit = True
 
-    raus_thread.join()
+#     raus_thread.join()
