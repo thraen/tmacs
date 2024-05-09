@@ -65,7 +65,8 @@ def piggy_end():
     if local:
         import subprocess
         print(where, 'calling xclip with', piggy)
-        clipcmdv = "xclip -i -r -selection PRIMARY".split(' ')
+#         clipcmdv = "xclip -i -r -selection PRIMARY".split(' ')
+        clipcmdv = "xclip -i -selection PRIMARY".split(' ')
 
         p = subprocess.Popen(clipcmdv, stdin=subprocess.PIPE)
         p.communicate(input= piggy)[0]
